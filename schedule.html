@@ -246,7 +246,10 @@ function render(){
         html += `<div class="slot ${slotClass(s.who)} ${s.done?'slot-done':''}" onclick="toggleDone(${s.id})">
           <div class="slot-name">${s.name}${s.done?' ✓':''}</div>
           <div class="slot-tag">${s.source} · ${s.who}</div>
-          <div class="slot-actions"><button class="act-btn" onclick="event.stopPropagation();deleteSession(${s.id})">✕ remove</button></div>
+          <div class="slot-actions">
+            <button class="act-btn" onclick="event.stopPropagation();setReminder(${s.id})">&#9679; remind</button>
+            <button class="act-btn" onclick="event.stopPropagation();deleteSession(${s.id})">✕ remove</button>
+          </div>
         </div>`;
       });
       html += '</td>';
@@ -286,6 +289,45 @@ function saveSession(){
   closeModal(); render();
 }
 document.getElementById('modal-bg').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-bg')) closeModal(); });
+
+// ─── Home Assistant Webhook ───────────────────────────────────────────────
+// Update this URL once your Raspberry Pi is set up.
+// Local network:  http://homeassistant.local:8123/api/webhook/olatoye-reminder
+// Remote (Nabu Casa): https://XXXXX.ui.nabu.casa/api/webhook/olatoye-reminder
+const HA_WEBHOOK_URL = 'http://homeassistant.local:8123/api/webhook/olatoye-reminder';
+
+async function setReminder(id) {
+  const s = sessions.find(x => x.id === id);
+  if (!s) return;
+  const who = s.who === 'Both' ? 'Elsie and Emma' : s.who;
+  const message = `Reminder for ${who} — ${s.name} is coming up soon.`;
+  try {
+    const res = await fetch(HA_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, session: s })
+    });
+    if (res.ok || res.status === 200) {
+      showToast(`Reminder set: "${message}"`);
+    } else {
+      showToast('Could not reach Home Assistant. Check your setup.', true);
+    }
+  } catch {
+    showToast('Home Assistant not reachable. Is your Pi on?', true);
+  }
+}
+
+function showToast(msg, isError = false) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);
+    background:${isError ? '#A32D2D' : '#3C3489'};color:#fff;padding:10px 20px;
+    border-radius:8px;font-size:13px;z-index:999;max-width:90vw;text-align:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2);`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
 render();
 </script>
 </body>
